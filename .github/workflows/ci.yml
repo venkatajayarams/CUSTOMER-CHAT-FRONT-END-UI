@@ -1,0 +1,97 @@
+name: CI — Validate Pull Request
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────
+  # 1. Basic HTML / file validation
+  # ─────────────────────────────────────────
+  validate:
+    name: Validate HTML & Structure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          echo "Checking required project files..."
+          files=("index.html" "README.md" "LICENSE")
+          for f in "${files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING: $f"
+              exit 1
+            else
+              echo "OK: $f"
+            fi
+          done
+
+      - name: Validate HTML syntax
+        uses: validator/validator-action@v1.6
+        with:
+          files: "index.html"
+        continue-on-error: true   # non-blocking until stricter rules are set
+
+      - name: Check for debug / console artifacts
+        run: |
+          echo "Scanning for leftover debug statements..."
+          if grep -rn "console\.log\|debugger\|TODO\|FIXME" --include="*.html" --include="*.js" .; then
+            echo "Warning: debug artifacts found — please review before merging."
+          else
+            echo "Clean — no debug artifacts found."
+          fi
+
+  # ─────────────────────────────────────────
+  # 2. Security scan (secret detection)
+  # ─────────────────────────────────────────
+  security:
+    name: Secret & Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history for secret scanning
+
+      - name: Run TruffleHog (secret detection)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+  # ─────────────────────────────────────────
+  # 3. PR title lint (Conventional Commits)
+  # ─────────────────────────────────────────
+  pr-lint:
+    name: Lint PR Title
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PR title follows Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+            ci
+          requireScope: false
