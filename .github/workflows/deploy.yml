@@ -3,6 +3,7 @@ name: Deploy to Vercel
 on:
   push:
     branches:
+      - practice_chat_bot_front_end
       - develop   # → Vercel Preview (staging)
       - main      # → Vercel Production
 
@@ -36,7 +37,7 @@ jobs:
       name: preview
       url: ${{ steps.deploy.outputs.url }}
 
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'preview')
+    if: github.ref_name == 'practice_chat_bot_front_end' || github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'preview')
 
     steps:
       - name: Checkout code
